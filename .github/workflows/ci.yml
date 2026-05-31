@@ -1,0 +1,58 @@
+name: CI
+
+# Stack-agnostic, graceful CI skeleton. Steps stay GREEN until code and a build manifest
+# exist, then activate automatically.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect build manifest
+        id: detect
+        run: |
+          if ls Package.swift 2>/dev/null | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Package.swift yet — skipping build/test."
+          fi
+
+      - name: Build & test
+        if: steps.detect.outputs.found == 'true'
+        run: swift build --build-tests && swift test
+
+  lint:
+    name: Lint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect lint config
+        id: detect
+        run: |
+          if ls .swiftlint.yml 2>/dev/null | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No .swiftlint.yml yet — skipping lint."
+          fi
+
+      - name: Lint (strict)
+        if: steps.detect.outputs.found == 'true'
+        run: swiftlint --strict
